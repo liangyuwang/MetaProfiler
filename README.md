@@ -9,7 +9,7 @@ MetaProfiler is a lightweight, structure-agnostic operator-level profiler for Py
 
 ## Example Results
 
-| name                               | op_type       | target                                           | shape                                                                                         |   time (ms) |
+| name                               | op_type       | target                                           | input shape                                                                                         |   time (ms) |
 |------------------------------------|---------------|--------------------------------------------------|-----------------------------------------------------------------------------------------------|-------------|
 | size                               | call_method   | size                                             | [torch.Size([4, 1024])]                                                                       |       0.01  |
 | getitem                            | call_function | <built-in function getitem>                      | [torch.Size([1])]                                                                             |       0.003 |
