@@ -156,7 +156,7 @@ def build_fake_inputs(shape_list, device):
 
 def print_tabular(results):
     from tabulate import tabulate
-    headers = ["name", "op_type", "target", "shape", "time (ms)"]
+    headers = ["name", "op_type", "target", "input shape", "time (ms)"]
     table = [
         [name, op_type, target, shape, f"{t:.3f}"] for name, op_type, target, shape, t in results
     ]
