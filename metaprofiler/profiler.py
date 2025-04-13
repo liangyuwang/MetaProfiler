@@ -61,13 +61,16 @@ def run_fx_op_profiler(model, input_sample, device="cuda"):
 def safe_profile_op(op_fn, *args, fallback_shape=(1,), device="cuda", **kwargs):
     try:
         # filter
-        sig = inspect.signature(op_fn)
-        valid_kwargs = {
-            k: v for k, v in kwargs.items()
-            if k in sig.parameters and sig.parameters[k].kind in [
-                inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD
-            ]
-        }
+        try:
+            sig = inspect.signature(op_fn)
+            valid_kwargs = {
+                k: v for k, v in kwargs.items()
+                if k in sig.parameters and sig.parameters[k].kind in [
+                    inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD
+                ]
+            }
+        except (ValueError, TypeError):
+            valid_kwargs = kwargs
         return profile_op(op_fn, *args, **valid_kwargs)
     except Exception as e:
         try:
@@ -76,7 +79,7 @@ def safe_profile_op(op_fn, *args, fallback_shape=(1,), device="cuda", **kwargs):
         except:
             return 0.0
 
-def profile_op(op_fn, *args, warmup=2, repeat=10, **kwargs):
+def profile_op(op_fn, *args, warmup=10, repeat=10, **kwargs):
     torch.cuda.synchronize()
     for _ in range(warmup):
         _ = op_fn(*args, **kwargs)
@@ -116,7 +119,7 @@ def resolve_inputs(node, meta_info_map, device):
             if meta:
                 shape = tuple(meta[0].shape)
                 dtype = meta[0].dtype
-                if dtype in [torch.float, torch.float32, torch.float64]:
+                if dtype in [torch.float16, torch.float32, torch.float64]:
                     return torch.randn(shape, dtype=dtype, device=device)
                 elif dtype in [torch.int64, torch.int32]:
                     return torch.randint(0, 2, shape, dtype=dtype, device=device)
