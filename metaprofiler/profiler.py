@@ -9,9 +9,9 @@ from torch.fx.passes.shape_prop import ShapeProp
 from .utils import *
 
 # Main profiling logic
-def run_fx_op_profiler(model, input_sample, device="cuda"):
-    traced = symbolic_trace(model)
-    meta_info_map = build_meta_info(traced, input_sample)
+def run_fx_op_profiler(meta_model, meta_input_sample, device="cuda"):
+    traced = symbolic_trace(meta_model)
+    meta_info_map = build_meta_info(traced, meta_input_sample)
 
     results = []
     for node in tqdm(traced.graph.nodes):
