@@ -7,8 +7,7 @@ from metaprofiler import run_fx_op_profiler, print_tabular
 
 
 model_cfgs = GPTConfigs()
-model_cfg = getattr(model_cfgs, "gpt2")
-model_cfg.n_layer = 2
+model_cfg = getattr(model_cfgs, "opt_66b")
 with torch.device('meta'):
     model = GPT(model_cfg)
 
