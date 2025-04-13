@@ -1,5 +1,6 @@
 from tqdm.auto import tqdm
 import operator
+import inspect
 import torch
 import torch.nn as nn
 from torch.fx import symbolic_trace
@@ -25,16 +26,16 @@ def run_fx_op_profiler(model, input_sample, device="cuda"):
 
             if node.op == "call_function":
                 if node.target == operator.getitem and isinstance(inputs[0], torch.Tensor):
-                    avg_time = profile_op(lambda x: x[inputs[1]], inputs[0])
+                    avg_time = safe_profile_op(lambda x: x[inputs[1]], inputs[0], device=device)
                 else:
-                    avg_time = profile_op(node.target, *inputs, **kwargs)
+                    avg_time = safe_profile_op(node.target, *inputs, **kwargs, device=device)
                 results.append((node.name, node.op, str(node.target), [i.shape for i in inputs if isinstance(i, torch.Tensor)], avg_time))
 
             elif node.op == "call_method":
                 method = node.target
                 tensor = inputs[0]
                 method_args = inputs[1:]
-                avg_time = profile_op(getattr(tensor, method), *method_args, **kwargs)
+                avg_time = safe_profile_op(getattr(tensor, method), *method_args, **kwargs, device=device)
                 results.append((node.name, node.op, method, [t.shape for t in inputs if isinstance(t, torch.Tensor)], avg_time))
 
             elif node.op == "call_module":
@@ -44,7 +45,7 @@ def run_fx_op_profiler(model, input_sample, device="cuda"):
                     if isinstance(value, nn.Parameter) and value is not None:
                         setattr(submod, attr, nn.Parameter(torch.randn(value.shape, device=device)))
                 submod = submod.eval().cuda()
-                avg_time = profile_op(submod, *inputs, **kwargs)
+                avg_time = safe_profile_op(submod, *inputs, **kwargs, device=device)
                 results.append((node.name, node.op, str(type(submod)), [i.shape for i in inputs if isinstance(i, torch.Tensor)], avg_time))
                 clear_tensors(submod.parameters())
             
@@ -57,21 +58,28 @@ def run_fx_op_profiler(model, input_sample, device="cuda"):
     return results
 
 
-def safe_profile_op(op_fn, inputs, fallback_shape=(1,), device='cuda', **kwargs):
+def safe_profile_op(op_fn, *args, fallback_shape=(1,), device="cuda", **kwargs):
     try:
-        return profile_op(op_fn, *inputs, **kwargs)
+        # filter
+        sig = inspect.signature(op_fn)
+        valid_kwargs = {
+            k: v for k, v in kwargs.items()
+            if k in sig.parameters and sig.parameters[k].kind in [
+                inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD
+            ]
+        }
+        return profile_op(op_fn, *args, **valid_kwargs)
     except Exception as e:
-        # fallback: just time a dummy op of the same class
         try:
             dummy_input = torch.randn(fallback_shape, device=device)
             return profile_op(lambda x: x + 1, dummy_input)
         except:
             return 0.0
 
-def profile_op(op_fn, *args, warmup=2, repeat=3):
+def profile_op(op_fn, *args, warmup=2, repeat=10, **kwargs):
     torch.cuda.synchronize()
     for _ in range(warmup):
-        _ = op_fn(*args)
+        _ = op_fn(*args, **kwargs)
     torch.cuda.synchronize()
 
     start = torch.cuda.Event(enable_timing=True)
@@ -79,7 +87,7 @@ def profile_op(op_fn, *args, warmup=2, repeat=3):
 
     start.record()
     for _ in range(repeat):
-        _ = op_fn(*args)
+        _ = op_fn(*args, **kwargs)
     end.record()
     torch.cuda.synchronize()
 
