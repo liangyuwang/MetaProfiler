@@ -39,12 +39,12 @@ def run_fx_op_profiler(meta_model, meta_input_sample, device="cuda"):
                 results.append((node.name, node.op, method, [t.shape for t in inputs if isinstance(t, torch.Tensor)], avg_time))
 
             elif node.op == "call_module":
-                submod = dict(model.named_modules())[node.target]
+                submod = dict(meta_model.named_modules())[node.target]
                 for attr in dir(submod):
                     value = getattr(submod, attr)
                     if isinstance(value, nn.Parameter) and value is not None:
                         setattr(submod, attr, nn.Parameter(torch.randn(value.shape, device=device)))
-                submod = submod.eval().cuda()
+                submod = submod.eval().to(device)
                 avg_time = safe_profile_op(submod, *inputs, **kwargs, device=device)
                 results.append((node.name, node.op, str(type(submod)), [i.shape for i in inputs if isinstance(i, torch.Tensor)], avg_time))
                 clear_tensors(submod.parameters())
